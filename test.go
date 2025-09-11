@@ -6,8 +6,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/codelif/katnip"
+	"github.com/gdamore/tcell/v2"
 )
 
 func must(err error) {
@@ -28,9 +30,26 @@ func makeRoundedPNG(out string, width, height, radius int, rgba string) error {
 	return cmd.Run()
 }
 
-func panel(k *katnip.Kitty, rw io.ReadWriter) int {
-	width, height := 800, 500
-	out := "/tmp/kitty_panel_rounded.png"
+func panelWithTcell(k *katnip.Kitty, rw io.ReadWriter) int {
+	screen, err := tcell.NewScreen()
+	must(err)
+	defer screen.Fini()
+
+	err = screen.Init()
+	must(err)
+
+	screen.Clear()
+	screen.SetStyle(tcell.StyleDefault.Background(tcell.ColorBlack))
+
+	width, height := 300, 300
+	radius := 10
+	color := tcell.ColorBlue
+
+	for x := radius; x < width-radius; x++ {
+		for y := radius; y < height-radius; y++ {
+			screen.SetContent(x, y, ' ', nil, tcell.StyleDefault.Foreground(color))
+		}
+	}
 
 	cols := os.Getenv("COLUMNS")
 	lines := os.Getenv("LINES")
@@ -49,27 +68,37 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 		"--place", place,
 		"-z", "-1",
 		"--background=none",
-		out,
+		"/tmp/kitty_panel_rounded.png",
 	)
 	icat.Env = os.Environ()
 	icat.Stdout, icat.Stderr = os.Stdout, os.Stderr
 	_ = icat.Run()
 
-	fmt.Println("hello world")
-
-	select {}
+	fmt.Println("\n\nhello world")
+	fmt.Printf("\033[?25l")
+	for {
+		event := screen.PollEvent()
+		switch e := event.(type) {
+		case *tcell.EventKey:
+			if e.Key() == tcell.KeyEscape {
+				return 0
+			}
+		case *tcell.EventResize:
+			width, height = screen.Size()
+			screen.Clear()
+		}
+	}
 }
 
 func init() {
-	katnip.RegisterFunc("rounded-demo", panel)
+	katnip.RegisterFunc("rounded-demo", panelWithTcell)
 }
 
 func main() {
-	width, height := 800, 500
-	radius := 24
-	color := "rgba(30,30,46,1)"
+	width, height := 300, 300
+	radius := 10
+	color := "#4A708B"
 	out := "/tmp/kitty_panel_rounded.png"
-
 	must(makeRoundedPNG(out, width, height, radius, color))
 
 	cfg := katnip.Config{
@@ -80,15 +109,16 @@ func main() {
 		KittyOverrides: []string{
 			"background_opacity=0.0",
 			"window_padding_width=0",
+			fmt.Sprintf("cursor=%s", color),
 		},
 		Overrides: map[string]string{
 			"--lines":   fmt.Sprintf("%dpx", height),
 			"--columns": fmt.Sprintf("%dpx", width),
 		},
-		// SingleInstance: true,
-		// InstanceGroup:  "rounded-demo",
 	}
 
 	p := katnip.NewPanel("rounded-demo", cfg)
 	p.Run()
+
+	time.Sleep(time.Second * 10)
 }
