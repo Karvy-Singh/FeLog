@@ -1,0 +1,18 @@
+2025/09/12 15:22:04.798718 START: panel init
+2025/09/12 15:22:06.704022 MOUSE move     btn=None    
+2025/09/12 15:22:06.724954 MOUSE move     btn=None    
+2025/09/12 15:22:06.765800 MOUSE move     btn=None    
+2025/09/12 15:22:08.082218 MOUSE press    btn=Left    
+2025/09/12 15:22:08.254649 MOUSE release  btn=Left    
+2025/09/12 15:22:08.254928 MOUSE press    btn=Left    
+2025/09/12 15:22:08.406847 MOUSE release  btn=Left    
+2025/09/12 15:22:08.407058 MOUSE press    btn=Left    
+2025/09/12 15:22:08.566101 MOUSE release  btn=Left    
+2025/09/12 15:22:08.566326 MOUSE press    btn=Left    
+2025/09/12 15:22:08.746502 MOUSE release  btn=Left    
+2025/09/12 15:22:08.746812 MOUSE press    btn=Left    
+2025/09/12 15:22:08.927198 MOUSE release  btn=Left    
+2025/09/12 15:22:12.299975 [idle] no mouse/keys for 2s
+2025/09/12 15:22:13.022806 FOCUS-OUT
+2025/09/12 15:22:13.626118 FOCUS-IN
+2025/09/12 15:22:13.626608 MOUSE move     btn=None    
