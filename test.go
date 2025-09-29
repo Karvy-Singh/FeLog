@@ -9,111 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"regexp"
 	"syscall"
 	"time"
 
+	"github.com/Karvy-Singh/FeLog/internals/mouse"
 	"github.com/codelif/katnip"
 	"golang.org/x/term"
 )
-
-const (
-	esc = "\x1b"
-
-	// Enable sequences
-	// 1006 = SGR mouse, 1003 = any-motion (more verbose than 1002)
-	// 1004 = focus in/out reporting
-	enableSGR      = esc + "[?1006h"
-	enableAnyMove  = esc + "[?1003h"
-	enableFocusRpt = esc + "[?1004h"
-
-	// disable sequences (always restore)
-	disableSGR      = esc + "[?1006l"
-	disableAnyMove  = esc + "[?1003l"
-	disableFocusRpt = esc + "[?1004l"
-)
-
-var (
-	sgrRe      = regexp.MustCompile(`\x1b\[\<(\d+);(\d+);(\d+)([Mm])`)
-	focusInRe  = regexp.MustCompile(`\x1b\[I`)
-	focusOutRe = regexp.MustCompile(`\x1b\[O`)
-)
-
-type MouseEvent struct {
-	X, Y      int
-	Button    string
-	Action    string // press, release, move, wheel
-	Modifiers []string
-	RawB      int
-}
-
-// decode SGR "b" field.
-// spec bits (xterm/kitty):
-// - low 2 bits: 0=left,1=middle,2=right,3=release
-// - +32 => motion flag (drag/move)
-// - +64 => wheel (64 up, 65 down)
-// - +4 shift, +8 alt, +16 ctrl
-func decodeSGR(b, x, y int, final byte) MouseEvent {
-	ev := MouseEvent{X: x, Y: y, RawB: b}
-
-	if b&4 != 0 {
-		ev.Modifiers = append(ev.Modifiers, "Shift")
-	}
-	if b&8 != 0 {
-		ev.Modifiers = append(ev.Modifiers, "Alt")
-	}
-	if b&16 != 0 {
-		ev.Modifiers = append(ev.Modifiers, "Ctrl")
-	}
-
-	isMotion := (b & 32) != 0
-	isWheel := (b & 64) != 0
-
-	switch {
-	case isWheel:
-		ev.Action = "wheel"
-		// 64 = wheel up, 65 = wheel down (with possible +modifiers)
-		switch b &^ (4 | 8 | 16) { // strip modifiers
-		case 64:
-			ev.Button = "WheelUp"
-		case 65:
-			ev.Button = "WheelDown"
-		default:
-			ev.Button = "Wheel?"
-		}
-	default:
-		btn := b & 3
-		switch btn {
-		case 0:
-			ev.Button = "Left"
-		case 1:
-			ev.Button = "Middle"
-		case 2:
-			ev.Button = "Right"
-		case 3:
-			ev.Button = "None"
-		}
-
-		// SGR final char: 'M' = press/drag, 'm' = release
-		if isMotion && final == 'M' && ev.Button != "None" {
-			ev.Action = "drag"
-		} else if isMotion && ev.Button == "None" {
-			ev.Action = "move"
-		} else if final == 'M' {
-			ev.Action = "press"
-		} else {
-			ev.Action = "release"
-		}
-	}
-
-	return ev
-}
-
-func must(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
 
 func makeRoundedPNG(out string, width, height, radius int, rgba string) error {
 	cmd := exec.Command(
@@ -128,8 +30,9 @@ func makeRoundedPNG(out string, width, height, radius int, rgba string) error {
 }
 
 func panel(k *katnip.Kitty, rw io.ReadWriter) int {
-	width, height := 800, 500
 	out := "/tmp/kitty_panel_rounded.png"
+	width := 300
+	height := 300
 
 	cols := os.Getenv("COLUMNS")
 	lines := os.Getenv("LINES")
@@ -168,7 +71,6 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 
 	log.Println("START: panel init")
 
-	log.Println("START: panel init")
 	// switch tty to raw mode
 	oldState, err := term.MakeRaw(int(os.Stdout.Fd()))
 	if err != nil {
@@ -177,9 +79,8 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 	}
 	defer term.Restore(int(os.Stdout.Fd()), oldState)
 
-	// ensure cleanup on signals
 	cleanup := func() {
-		os.Stdout.WriteString(disableAnyMove + disableSGR + disableFocusRpt)
+		os.Stdout.WriteString(mouse.DisableAnyMove + mouse.DisableSGR + mouse.DisableFocus + mouse.DisableSGRPixels)
 		os.Stdout.Sync()
 	}
 	defer cleanup()
@@ -193,7 +94,7 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 	}()
 
 	// enable terminal reports
-	os.Stdout.WriteString(enableSGR + enableAnyMove + enableFocusRpt)
+	os.Stdout.WriteString(mouse.EnableSGR + mouse.EnableAnyMove + mouse.EnableFocus + mouse.EnableSGRPixels)
 	os.Stdout.Sync()
 
 	fmt.Println("raw mouse reader: SGR + any-motion + focus reporting enabled")
@@ -203,14 +104,13 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 	reader := bufio.NewReader(os.Stdin)
 	var buf bytes.Buffer
 
-	// optional inactivity timer example (helpful if you want to infer "left?")
-	// not a real leave event; just no-activity heuristic
+	// for some reason this is here, will remove later, but MIGHT prove to be useful in some cases.
 	last := time.Now()
 	go func() {
 		for range time.Tick(1500 * time.Millisecond) {
 			if time.Since(last) > 2*time.Second {
 				log.Println("[idle] no mouse/keys for 2s")
-				last = time.Now() // throttle messages
+				last = time.Now()
 			}
 		}
 	}()
@@ -223,60 +123,23 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 		}
 		last = time.Now()
 
-		// quit on plain 'q'
-		if b == 'q' {
-			break
-		}
-
 		buf.WriteByte(b)
 
 		// try to peel off complete SGR mouse and focus tokens
 		data := buf.Bytes()
 
+		data, focusIn, focusOut, mouseEV := mouse.ExtractEvents(data)
+		if focusIn != 0 {
+			log.Printf("FOCUS-IN")
+		}
+		if focusOut != 0 {
+			log.Printf("FOCUS-OUT")
+		}
+		if mouseEV.Motion != "" || mouseEV.Click != "" {
+			log.Printf("MOUSE %-7s  btn=%-8s", mouseEV.Motion, mouseEV.Click)
+		}
+
 		// focus in/out
-		for {
-			loc := focusInRe.FindIndex(data)
-			if loc == nil {
-				break
-			}
-			log.Println("FOCUS-IN")
-			// drop that slice
-			data = append(data[:loc[0]], data[loc[1]:]...)
-		}
-		for {
-			loc := focusOutRe.FindIndex(data)
-			if loc == nil {
-				break
-			}
-			log.Println("FOCUS-OUT")
-			data = append(data[:loc[0]], data[loc[1]:]...)
-		}
-
-		// SGR mouse (can be multiple packed together)
-		for {
-			m := sgrRe.FindSubmatchIndex(data)
-			if m == nil {
-				break
-			}
-			// extract groups
-			// groups: 1=b, 2=x, 3=y, 4=final
-			bStr := data[m[2]:m[3]]
-			xStr := data[m[4]:m[5]]
-			yStr := data[m[6]:m[7]]
-			final := data[m[8]:m[9]][0]
-
-			var bb, xx, yy int
-			fmt.Sscanf(string(bStr), "%d", &bb)
-			fmt.Sscanf(string(xStr), "%d", &xx)
-			fmt.Sscanf(string(yStr), "%d", &yy)
-
-			ev := decodeSGR(bb, xx, yy, final)
-			log.Printf("MOUSE %-7s  btn=%-8s", ev.Action, ev.Button)
-
-			// remove the matched slice and continue scanning the rest
-			data = append(data[:m[0]], data[m[1]:]...)
-		}
-
 		// keep any tail bytes that didn't match a full token (partial escape)
 		buf.Reset()
 		buf.Write(data)
@@ -293,18 +156,21 @@ func init() {
 }
 
 func main() {
-	width, height := 800, 500
+	width, height := 300, 300
 	radius := 24
 	color := "rgba(30,30,46,1)"
 	out := "/tmp/kitty_panel_rounded.png"
 
-	must(makeRoundedPNG(out, width, height, radius, color))
+	err := makeRoundedPNG(out, width, height, radius, color)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	cfg := katnip.Config{
 		Edge:        katnip.EdgeNone,
 		Position:    katnip.Vector{X: 300, Y: 300},
 		Layer:       katnip.LayerTop,
-		FocusPolicy: katnip.FocusExclusive,
+		FocusPolicy: katnip.FocusOnDemand,
 		KittyOverrides: []string{
 			"background_opacity=0.0",
 			"window_padding_width=0",

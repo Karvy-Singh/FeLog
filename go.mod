@@ -1,4 +1,4 @@
-module test.go
+module github.com/Karvy-Singh/FeLog
 
 go 1.24.6
 
