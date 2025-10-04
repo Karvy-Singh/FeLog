@@ -7,27 +7,16 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/Karvy-Singh/FeLog/internals/mouse"
+	"github.com/Karvy-Singh/FeLog/internals/tui"
+
 	"github.com/codelif/katnip"
 	"golang.org/x/term"
 )
-
-func makeRoundedPNG(out string, width, height, radius int, rgba string) error {
-	cmd := exec.Command(
-		"magick",
-		"-size", fmt.Sprintf("%dx%d", width, height), "canvas:none",
-		"-fill", rgba,
-		"-draw", fmt.Sprintf("roundrectangle 0,0 %d,%d %d,%d", width-1, height-1, radius, radius),
-		"PNG32:"+out,
-	)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
-}
 
 func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 	out := "/tmp/kitty_panel_rounded.png"
@@ -43,21 +32,11 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 		lines = "40"
 	}
 
-	place := fmt.Sprintf("%sx%s@0x0", cols, lines)
+	err := tui.RenderIcat(out, cols, lines, width, height)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	icat := exec.Command("kitty", "+kitten", "icat",
-		"--stdin=no",
-		"--use-window-size", fmt.Sprintf("%s,%s,%d,%d", cols, lines, width, height),
-		"--place", place,
-		"-z", "-1",
-		"--background=none",
-		out,
-	)
-	icat.Env = os.Environ()
-	icat.Stdout, icat.Stderr = os.Stdout, os.Stderr
-	_ = icat.Run()
-
-	fmt.Println("hello world")
 	if _, err := os.Stat("./appLogs.txt"); err == nil {
 		os.Remove("./appLogs.txt")
 	}
@@ -152,7 +131,7 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 }
 
 func init() {
-	katnip.RegisterFunc("rounded-demo", panel)
+	katnip.RegisterFunc("FeLog", panel)
 }
 
 func main() {
@@ -161,7 +140,7 @@ func main() {
 	color := "rgba(30,30,46,1)"
 	out := "/tmp/kitty_panel_rounded.png"
 
-	err := makeRoundedPNG(out, width, height, radius, color)
+	err := tui.MakeRoundedPNG(out, width, height, radius, color)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -179,10 +158,8 @@ func main() {
 			"--lines":   fmt.Sprintf("%dpx", height),
 			"--columns": fmt.Sprintf("%dpx", width),
 		},
-		// SingleInstance: true,
-		// InstanceGroup:  "rounded-demo",
 	}
 
-	p := katnip.NewPanel("rounded-demo", cfg)
+	p := katnip.NewPanel("FeLog", cfg)
 	p.Run()
 }
