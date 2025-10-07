@@ -1,1 +1,14 @@
-2025/10/07 21:15:17.210842 START: tui init
+2025/10/07 22:47:24.231556 START: tui init
+2025/10/07 22:47:25.369275 MOUSE move     btn=None    
+2025/10/07 22:47:25.374385 MOUSE move     btn=None    
+2025/10/07 22:47:25.382032 MOUSE move     btn=None    
+2025/10/07 22:47:25.389245 MOUSE move     btn=None    
+2025/10/07 22:47:25.396705 MOUSE move     btn=None    
+2025/10/07 22:47:25.402796 MOUSE move     btn=None    
+2025/10/07 22:47:25.410193 MOUSE move     btn=None    
+2025/10/07 22:47:25.417435 MOUSE move     btn=None    
+2025/10/07 22:47:25.424426 MOUSE move     btn=None    
+2025/10/07 22:47:25.431089 MOUSE move     btn=None    
+2025/10/07 22:47:25.438889 MOUSE move     btn=None    
+2025/10/07 22:47:25.445677 MOUSE move     btn=None    
+2025/10/07 22:47:25.452646 MOUSE drag     btn=Left    
