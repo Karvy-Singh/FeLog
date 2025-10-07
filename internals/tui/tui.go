@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/codelif/katnip"
 	"golang.org/x/term"
 
 	"github.com/Karvy-Singh/FeLog/internals/mouse"
@@ -18,42 +18,39 @@ import (
 )
 
 type Config struct {
-	Width, Height  int
-	X, Y           int
-	Radius         int
-	ColorRGBA      string
-	Layer          katnip.Layer
-	FocusPolicy    katnip.FocusPolicy
-	KittyOverrides []string
+	Width, Height int
+	X, Y          int
+	Radius        int
+	ColorRGBA     string
 }
 
 type Option func(*Config)
 
-func WithSize() Option         { return func(c *Config) { c.Width, c.Height = 300, 300 } }
-func WithPosition() Option     { return func(c *Config) { c.X, c.Y = 300, 300 } }
-func WithCornerRadius() Option { return func(c *Config) { c.Radius = 24 } }
-func WithPanelColor() Option   { return func(c *Config) { c.ColorRGBA = "rgba(30,30,46,1)" } }
+func WithSize() Option                   { return func(c *Config) { c.Width, c.Height = 300, 300 } }
+func WithPosition() Option               { return func(c *Config) { c.X, c.Y = 300, 300 } }
+func WithCornerRadius() Option           { return func(c *Config) { c.Radius = 24 } }
+func WithPanelColor(color string) Option { return func(c *Config) { c.ColorRGBA = color } }
 
 type TUI struct {
 	cfg     Config
 	imgPath string
+	Label   string
+	OnClick func()
 }
 
-func New(opts ...Option) (*TUI, error) {
+func New(label string, onClick func(), opts ...Option) (*TUI, error) {
 	c := Config{
-		Width:       300,
-		Height:      300,
-		Radius:      16,
-		ColorRGBA:   "rgba(30,30,46,1)",
-		Layer:       katnip.LayerTop,
-		FocusPolicy: katnip.FocusOnDemand,
+		Width:     300,
+		Height:    300,
+		Radius:    16,
+		ColorRGBA: "rgba(30,30,46,1)",
 	}
 
 	for _, o := range opts {
 		o(&c)
 	}
 
-	return &TUI{cfg: c, imgPath: "/tmp/kitty_panel_rounded.png"}, nil
+	return &TUI{cfg: c, imgPath: fmt.Sprintf("/tmp/%s_panel.png", label), Label: label, OnClick: onClick}, nil
 }
 
 func (t *TUI) Run() int {
@@ -139,6 +136,11 @@ func (t *TUI) Run() int {
 		}
 		if ev.Motion != "" || ev.Click != "" {
 			infoLog.Printf("MOUSE %-7s  btn=%-8s", ev.Motion, ev.Click)
+			if ev.Motion == "press" && ev.Click == "Left" {
+				if t.OnClick != nil {
+					t.OnClick()
+				}
+			}
 		}
 
 		buf.Reset()
