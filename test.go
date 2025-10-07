@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 
 	"github.com/Karvy-Singh/FeLog/internals/tui"
 	"github.com/codelif/katnip"
@@ -15,15 +14,8 @@ func panel(k *katnip.Kitty, rw io.ReadWriter) int {
 		tui.WithSize(),
 		tui.WithCornerRadius(),
 		tui.WithPanelColor(),
-		tui.WithLayer(),
-		tui.WithFocusPolicy(),
-		tui.WithKittyOverrides(
-			"background_opacity=0.0",
-			"window_padding_width=0",
-		),
 	)
 	if err != nil {
-		log.Println("tui init:", err)
 		return 1
 	}
 	return t.Run() // handles raw mode, signals, icat, loop, cleanup

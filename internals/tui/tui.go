@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -34,14 +33,6 @@ func WithSize() Option         { return func(c *Config) { c.Width, c.Height = 30
 func WithPosition() Option     { return func(c *Config) { c.X, c.Y = 300, 300 } }
 func WithCornerRadius() Option { return func(c *Config) { c.Radius = 24 } }
 func WithPanelColor() Option   { return func(c *Config) { c.ColorRGBA = "rgba(30,30,46,1)" } }
-func WithLayer() Option        { return func(c *Config) { c.Layer = katnip.LayerTop } }
-func WithFocusPolicy() Option {
-	return func(c *Config) { c.FocusPolicy = katnip.FocusOnDemand }
-}
-
-func WithKittyOverrides(k ...string) Option {
-	return func(c *Config) { c.KittyOverrides = append(c.KittyOverrides, k...) }
-}
 
 type TUI struct {
 	cfg     Config
@@ -104,9 +95,6 @@ func (t *TUI) Run() int {
 
 	os.Stdout.WriteString("\033[?25l" + mouse.EnableSGR + mouse.EnableAnyMove + mouse.EnableFocus + mouse.EnableSGRPixels)
 	os.Stdout.Sync()
-
-	fmt.Println("raw mouse reader: SGR + any-motion + focus reporting enabled")
-	fmt.Println("press 'q' to quit.\n")
 
 	if err := RenderIcat(t.imgPath, t.cfg.Width, t.cfg.Height); err != nil {
 		errorLog.Println("icat:", err)
