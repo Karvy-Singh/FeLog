@@ -100,7 +100,7 @@ func ExtractEvents(data []byte) (rest []byte, focusIn, focusOut int, events Mous
 		buf = append(buf[:loc[0]], buf[loc[1]:]...)
 	}
 
-	// for parsing (and remove) all SGR packets that may come packed together to us
+	// for parsing (and removing) all SGR packets that may come packed together
 	for {
 		m := SgrRe.FindSubmatchIndex(buf)
 		if m == nil {

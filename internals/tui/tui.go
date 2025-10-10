@@ -26,10 +26,9 @@ type Config struct {
 
 type Option func(*Config)
 
-func WithSize() Option                   { return func(c *Config) { c.Width, c.Height = 300, 300 } }
-func WithPosition() Option               { return func(c *Config) { c.X, c.Y = 300, 300 } }
-func WithCornerRadius() Option           { return func(c *Config) { c.Radius = 24 } }
-func WithPanelColor(color string) Option { return func(c *Config) { c.ColorRGBA = color } }
+func WithSize() Option         { return func(c *Config) { c.Width, c.Height = 300, 300 } }
+func WithCornerRadius() Option { return func(c *Config) { c.Radius = 24 } }
+func WithPanelColor() Option   { return func(c *Config) { c.ColorRGBA = "rgba(30,30,46,1)" } }
 
 type TUI struct {
 	cfg     Config
@@ -93,8 +92,8 @@ func (t *TUI) Run() int {
 	os.Stdout.WriteString("\033[?25l" + mouse.EnableSGR + mouse.EnableAnyMove + mouse.EnableFocus + mouse.EnableSGRPixels)
 	os.Stdout.Sync()
 
-	if err := RenderIcat(t.imgPath, t.cfg.Width, t.cfg.Height); err != nil {
-		errorLog.Println("icat:", err)
+	if err, err2 := RenderIcat(t.imgPath, t.Label, t.cfg.Width, t.cfg.Height); err != nil {
+		errorLog.Println("icat:", err, err2)
 		return 1
 	}
 

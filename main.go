@@ -23,6 +23,7 @@ const (
 )
 
 func main() {
+	var panels []*katnip.Panel
 	// --- manual screen size (no katnip API) ---
 	screenW := flag.Int("screen-w", 1920, "screen width in px")
 	screenH := flag.Int("screen-h", 1080, "screen height in px")
@@ -43,7 +44,6 @@ func main() {
 	type item struct {
 		handler string
 		label   string
-		color   string
 		col     int
 		row     int
 		clickFn func()
@@ -57,25 +57,25 @@ func main() {
 				_ = exec.Command("sh", "-lc", "true").Run() // ensure shell available
 				f()
 			}
-			// kill this app after one click (wlogout behavior)
-			os.Exit(0)
+			for _, panel := range panels {
+				panel.Kill()
+			}
 		}
 	}
 
 	items := []item{
-		{"FeLog:poweroff", "Power Off", "rgba(210, 15, 57, 1)", 0, 0, func() { _ = exec.Command("systemctl", "poweroff").Start() }},
-		{"FeLog:reboot", "Reboot", "rgba(223, 142, 29, 1)", 1, 0, func() { _ = exec.Command("systemctl", "reboot").Start() }},
-		{"FeLog:logout", "Log Out", "rgba(64, 160, 43, 1)", 2, 0, func() { _ = exec.Command("loginctl", "terminate-user", os.Getenv("USER")).Start() }},
-		{"FeLog:suspend", "Suspend", "rgba(30, 102, 245, 1)", 0, 1, func() { _ = exec.Command("systemctl", "suspend").Start() }},
-		{"FeLog:hibernate", "Hibernate", "rgba(136, 57, 239, 1)", 1, 1, func() { _ = exec.Command("systemctl", "hibernate").Start() }},
-		{"FeLog:lock", "Lock", "rgba(49, 50, 68, 1)", 2, 1, func() { _ = exec.Command("swaylock").Start() }}, // swap your locker
+		{"FeLog:shutdown", "shutdown", 0, 0, func() { _ = exec.Command("systemctl", "poweroff").Start() }},
+		{"FeLog:reboot", "reboot", 1, 0, func() { _ = exec.Command("systemctl", "reboot").Start() }},
+		{"FeLog:logout", "logout", 2, 0, func() { _ = exec.Command("loginctl", "terminate-user", os.Getenv("USER")).Start() }},
+		{"FeLog:suspend", "suspend", 0, 1, func() { _ = exec.Command("systemctl", "suspend").Start() }},
+		{"FeLog:hibernate", "hibernate", 1, 1, func() { _ = exec.Command("systemctl", "hibernate").Start() }},
+		{"FeLog:lock", "lock", 2, 1, func() { _ = exec.Command("loginctl", "lock-session").Start() }},
 	}
 
 	// register 6 handlers (each builds its own TUI with its own color/label/click)
 	for _, it := range items {
 		handlerName := it.handler
 		label := it.label
-		color := it.color
 		onClick := exitAfterClick(it.clickFn)
 
 		katnip.RegisterFunc(handlerName, func(k *katnip.Kitty, rw io.ReadWriter) int {
@@ -84,7 +84,7 @@ func main() {
 			t, err := tui.New(label, onClick,
 				tui.WithSize(),
 				tui.WithCornerRadius(),
-				tui.WithPanelColor(color),
+				tui.WithPanelColor(),
 			)
 			if err != nil {
 				return 1
@@ -118,6 +118,8 @@ func main() {
 		}
 
 		p := katnip.NewPanel(it.handler, cfg)
+		panels = append(panels, p)
+
 		go func(lbl string) {
 			defer wg.Done()
 			if err := p.Run(); err != nil {

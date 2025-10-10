@@ -18,7 +18,7 @@ func MakeRoundedPNG(out string, width, height, radius int, rgba string) error {
 	return cmd.Run()
 }
 
-func RenderIcat(out string, width, height int) error {
+func RenderIcat(bg, label string, width, height int) (error, error) {
 	colsEnv := os.Getenv("COLUMNS")
 	linesEnv := os.Getenv("LINES")
 	if colsEnv == "" {
@@ -29,15 +29,30 @@ func RenderIcat(out string, width, height int) error {
 	}
 
 	place := fmt.Sprintf("%sx%s@0x0", colsEnv, linesEnv)
+	path := fmt.Sprintf("./assets/%s.png", label)
+
 	icat := exec.Command("kitty", "+kitten", "icat",
+		"--stdin=no",
+		"--use-window-size", fmt.Sprintf("%s,%s,%d,%d", colsEnv, linesEnv, width, height),
+		"--place", place,
+		"-z", "-2",
+		"--background=none",
+		bg,
+	)
+	icat2 := exec.Command("kitty", "+kitten", "icat",
 		"--stdin=no",
 		"--use-window-size", fmt.Sprintf("%s,%s,%d,%d", colsEnv, linesEnv, width, height),
 		"--place", place,
 		"-z", "-1",
 		"--background=none",
-		out,
+		path,
 	)
+
 	icat.Env = os.Environ()
 	icat.Stdout, icat.Stderr = os.Stdout, nil
-	return icat.Run()
+
+	icat2.Env = os.Environ()
+	icat2.Stdout, icat2.Stderr = os.Stdout, nil
+
+	return icat.Run(), icat2.Run()
 }

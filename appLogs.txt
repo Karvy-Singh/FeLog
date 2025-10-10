@@ -1,14 +1,18 @@
-2025/10/07 22:47:24.231556 START: tui init
-2025/10/07 22:47:25.369275 MOUSE move     btn=None    
-2025/10/07 22:47:25.374385 MOUSE move     btn=None    
-2025/10/07 22:47:25.382032 MOUSE move     btn=None    
-2025/10/07 22:47:25.389245 MOUSE move     btn=None    
-2025/10/07 22:47:25.396705 MOUSE move     btn=None    
-2025/10/07 22:47:25.402796 MOUSE move     btn=None    
-2025/10/07 22:47:25.410193 MOUSE move     btn=None    
-2025/10/07 22:47:25.417435 MOUSE move     btn=None    
-2025/10/07 22:47:25.424426 MOUSE move     btn=None    
-2025/10/07 22:47:25.431089 MOUSE move     btn=None    
-2025/10/07 22:47:25.438889 MOUSE move     btn=None    
-2025/10/07 22:47:25.445677 MOUSE move     btn=None    
-2025/10/07 22:47:25.452646 MOUSE drag     btn=Left    
+2025/10/10 23:50:41.721011 START: tui init
+2025/10/10 23:50:42.341900 MOUSE move     btn=None    
+2025/10/10 23:50:42.347244 MOUSE move     btn=None    
+2025/10/10 23:50:42.354947 MOUSE move     btn=None    
+2025/10/10 23:50:42.361954 MOUSE move     btn=None    
+2025/10/10 23:50:42.368993 MOUSE move     btn=None    
+2025/10/10 23:50:42.375744 MOUSE move     btn=None    
+2025/10/10 23:50:42.383174 MOUSE move     btn=None    
+2025/10/10 23:50:42.390409 MOUSE move     btn=None    
+2025/10/10 23:50:42.397165 MOUSE move     btn=None    
+2025/10/10 23:50:42.404037 MOUSE move     btn=None    
+2025/10/10 23:50:42.411593 MOUSE move     btn=None    
+2025/10/10 23:50:42.418573 MOUSE move     btn=None    
+2025/10/10 23:50:42.425744 MOUSE move     btn=None    
+2025/10/10 23:50:42.432435 MOUSE drag     btn=Left    
+2025/10/10 23:50:44.994921 [idle] no mouse/keys for 2s
+2025/10/10 23:50:47.994155 [idle] no mouse/keys for 2s
+2025/10/10 23:50:50.994349 [idle] no mouse/keys for 2s
