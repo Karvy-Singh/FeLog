@@ -137,7 +137,10 @@ func (t *TUI) Run() int {
 			infoLog.Printf("MOUSE %-7s  btn=%-8s", ev.Motion, ev.Click)
 			if ev.Motion == "press" && ev.Click == "Left" {
 				if t.OnClick != nil {
-					t.OnClick()
+					_ = os.WriteFile(fmt.Sprintf("/tmp/felog_clicked_%s", t.Label), []byte("1"), 0o600)
+					os.Stdout.Sync()
+					os.Stderr.Sync()
+					os.Exit(0)
 				}
 			}
 		}
