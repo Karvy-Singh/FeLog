@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/Karvy-Singh/FeLog/internals/tui"
 	"github.com/codelif/katnip"
@@ -41,26 +42,39 @@ func main() {
 		label   string
 		col     int
 		row     int
-		clickFn func()
 	}
 
 	items := []item{
-		{"FeLog:shutdown", "shutdown", 0, 0, func() { _ = exec.Command("systemctl", "poweroff").Start() }},
-		{"FeLog:reboot", "reboot", 1, 0, func() { _ = exec.Command("systemctl", "reboot").Start() }},
-		{"FeLog:logout", "logout", 2, 0, func() { _ = exec.Command("loginctl", "terminate-user", os.Getenv("USER")).Start() }},
-		{"FeLog:suspend", "suspend", 0, 1, func() { _ = exec.Command("systemctl", "suspend").Start() }},
-		{"FeLog:hibernate", "hibernate", 1, 1, func() { _ = exec.Command("systemctl", "hibernate").Start() }},
-		{"FeLog:lock", "lock", 2, 1, func() { _ = exec.Command("loginctl", "lock-session").Start() }},
+		{"FeLog:shutdown", "shutdown", 0, 0},
+		{"FeLog:reboot", "reboot", 1, 0},
+		{"FeLog:logout", "logout", 2, 0},
+		{"FeLog:suspend", "suspend", 0, 1},
+		{"FeLog:hibernate", "hibernate", 1, 1},
+		{"FeLog:lock", "lock", 2, 1},
 	}
 
-	// register 6 handlers (each builds its own TUI with its own color/label/click)
+	// channel that the *parent* will use internally once it sees a click file
+	clickCh := make(chan string, 1)
+
+	// register handlers: each TUI writes /tmp/felog_clicked_<label> on click
 	for _, it := range items {
 		handlerName := it.handler
 		label := it.label
-		onClick := it.clickFn
 
 		katnip.RegisterFunc(handlerName, func(k *katnip.Kitty, rw io.ReadWriter) int {
-			t, err := tui.New(label, onClick,
+			clickFn := func() {
+				path := fmt.Sprintf("/tmp/felog_clicked_%s", label)
+				// best effort, ignore error
+				f, _ := os.Create(path)
+				if f != nil {
+					_ = f.Close()
+				}
+				// IMPORTANT:
+				// let the TUI keep running; main will kill it.
+				// If your current TUI exits on click, remove that behaviour.
+			}
+
+			t, err := tui.New(label, clickFn,
 				tui.WithSize(),
 				tui.WithCornerRadius(),
 				tui.WithPanelColor(),
@@ -72,16 +86,15 @@ func main() {
 		})
 	}
 
-	// spawn all panels concurrently
 	type paneMeta struct {
 		label string
 		do    func() error
 	}
-	panelMeta := map[*katnip.Panel]paneMeta{}
+
+	panelMeta := map[string]paneMeta{}
 
 	wrap := func(cmd *exec.Cmd) func() error {
 		return func() error {
-			// capture errors; don’t hide them
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			return cmd.Run()
@@ -116,7 +129,6 @@ func main() {
 		p := katnip.NewPanel(it.handler, cfg)
 		panels = append(panels, p)
 
-		// build parent-side action (with error reporting)
 		var do func() error
 		switch it.label {
 		case "shutdown":
@@ -135,38 +147,58 @@ func main() {
 			do = func() error { return nil }
 		}
 
-		panelMeta[p] = paneMeta{label: it.label, do: do}
+		panelMeta[it.label] = paneMeta{label: it.label, do: do}
 
 		go func(lbl string, p *katnip.Panel) {
 			defer wg.Done()
 			if err := p.Run(); err != nil {
 				log.Printf("panel %s exited with error: %v", lbl, err)
+			} else {
+				log.Printf("panel %s exited cleanly", lbl)
 			}
-
-			// On first panel to exit, detect if it was a click and act
-			once.Do(func() {
-				clickedFlag := fmt.Sprintf("/tmp/felog_clicked_%s", lbl)
-				_, clicked := os.Stat(clickedFlag)
-				if clicked == nil {
-					_ = os.Remove(clickedFlag)
-					if meta, ok := panelMeta[p]; ok && meta.do != nil {
-						if err := meta.do(); err != nil {
-							log.Printf("action %s failed: %v", meta.label, err)
-						}
-					}
-				} else {
-					log.Printf("panel %s exited without click (q/close)", lbl)
-				}
-
-				// kill the rest
-				for _, other := range panels {
-					if other != p {
-						_ = other.Kill()
-					}
-				}
-			})
 		}(it.label, p)
 	}
+
+	// watcher: looks for /tmp/felog_clicked_<label> written by any TUI
+	go func() {
+		labels := make([]string, 0, len(items))
+		for _, it := range items {
+			labels = append(labels, it.label)
+		}
+
+		for {
+			for _, lbl := range labels {
+				path := fmt.Sprintf("/tmp/felog_clicked_%s", lbl)
+				if _, err := os.Stat(path); err == nil {
+					_ = os.Remove(path) // ignore error
+					select {
+					case clickCh <- lbl:
+					default:
+					}
+					return
+				}
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	// react to the first click: run action and kill all panels together
+	go func() {
+		lbl := <-clickCh
+		once.Do(func() {
+			if meta, ok := panelMeta[lbl]; ok && meta.do != nil {
+				if err := meta.do(); err != nil {
+					log.Printf("action %s failed: %v", meta.label, err)
+				}
+			} else {
+				log.Printf("no action registered for label %s", lbl)
+			}
+
+			for _, p := range panels {
+				_ = p.Kill()
+			}
+		})
+	}()
 
 	wg.Wait()
 }
