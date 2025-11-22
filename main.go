@@ -53,7 +53,7 @@ func main() {
 		{"FeLog:lock", "lock", 2, 1},
 	}
 
-	// channel that the *parent* will use internally once it sees a click file
+	// channel that the parent will use internally once it sees a click file
 	clickCh := make(chan string, 1)
 
 	// register handlers: each TUI writes /tmp/felog_clicked_<label> on click
@@ -64,14 +64,10 @@ func main() {
 		katnip.RegisterFunc(handlerName, func(k *katnip.Kitty, rw io.ReadWriter) int {
 			clickFn := func() {
 				path := fmt.Sprintf("/tmp/felog_clicked_%s", label)
-				// best effort, ignore error
 				f, _ := os.Create(path)
 				if f != nil {
 					_ = f.Close()
 				}
-				// IMPORTANT:
-				// let the TUI keep running; main will kill it.
-				// If your current TUI exits on click, remove that behaviour.
 			}
 
 			t, err := tui.New(label, clickFn,
@@ -79,6 +75,10 @@ func main() {
 				tui.WithCornerRadius(),
 				tui.WithPanelColor(),
 			)
+			if err != nil {
+				return 1
+			}
+			err = k.Show()
 			if err != nil {
 				return 1
 			}
@@ -106,16 +106,19 @@ func main() {
 
 	var once sync.Once
 	var panels []*katnip.Panel
+	var panelReady sync.WaitGroup // Synchronization for panel readiness
+	panelReady.Add(len(items))    // Add all panels to "ready" count
 
 	for _, it := range items {
 		x := paddingX + it.col*(tileSize+*gap)
 		y := paddingY + it.row*(tileSize+*gap)
 
 		cfg := katnip.Config{
-			Edge:        katnip.EdgeNone,
-			Position:    katnip.Vector{X: x, Y: y},
-			Layer:       katnip.LayerTop,
-			FocusPolicy: katnip.FocusOnDemand,
+			Edge:          katnip.EdgeNone,
+			Position:      katnip.Vector{X: x, Y: y},
+			Layer:         katnip.LayerTop,
+			FocusPolicy:   katnip.FocusOnDemand,
+			StartAsHidden: true,
 			KittyOverrides: []string{
 				"background_opacity=0.0",
 				"window_padding_width=0",
@@ -149,8 +152,10 @@ func main() {
 
 		panelMeta[it.label] = paneMeta{label: it.label, do: do}
 
+		// Initialize each panel in goroutines
 		go func(lbl string, p *katnip.Panel) {
 			defer wg.Done()
+			defer panelReady.Done() // Mark the panel as "ready" when initialization finishes
 			if err := p.Run(); err != nil {
 				log.Printf("panel %s exited with error: %v", lbl, err)
 			} else {
@@ -158,6 +163,8 @@ func main() {
 			}
 		}(it.label, p)
 	}
+
+	panelReady.Wait()
 
 	// watcher: looks for /tmp/felog_clicked_<label> written by any TUI
 	go func() {
@@ -170,7 +177,7 @@ func main() {
 			for _, lbl := range labels {
 				path := fmt.Sprintf("/tmp/felog_clicked_%s", lbl)
 				if _, err := os.Stat(path); err == nil {
-					_ = os.Remove(path) // ignore error
+					_ = os.Remove(path)
 					select {
 					case clickCh <- lbl:
 					default:

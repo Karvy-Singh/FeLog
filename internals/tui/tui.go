@@ -53,6 +53,7 @@ func New(label string, onClick func(), opts ...Option) (*TUI, error) {
 }
 
 func (t *TUI) Run() int {
+	os.Stdout.WriteString("\033[?25h")
 	infoLog, err := utils.MakeLogger("appLogs")
 	if err != nil {
 		log.Fatal(err)
