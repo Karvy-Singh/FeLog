@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,10 +79,6 @@ func main() {
 			if err != nil {
 				return 1
 			}
-			err = k.Show()
-			if err != nil {
-				return 1
-			}
 			return t.Run()
 		})
 	}
@@ -102,12 +99,9 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(len(items))
-
 	var once sync.Once
 	var panels []*katnip.Panel
 	var panelReady sync.WaitGroup // Synchronization for panel readiness
-	panelReady.Add(len(items))    // Add all panels to "ready" count
 
 	for _, it := range items {
 		x := paddingX + it.col*(tileSize+*gap)
@@ -152,11 +146,31 @@ func main() {
 
 		panelMeta[it.label] = paneMeta{label: it.label, do: do}
 
+		panelReady.Add(1)
+		wg.Add(1)
+
 		// Initialize each panel in goroutines
 		go func(lbl string, p *katnip.Panel) {
+			if err := p.Start(); err != nil {
+				panelReady.Done()
+				log.Printf("panel %s failed to start: %v", lbl, err)
+				wg.Done()
+				return
+			}
+
+			socketPath := panelSocket(p)
+			if socketPath == "" {
+				log.Printf("panel %s missing socket path", lbl)
+				panelReady.Done()
+			} else if err := waitForSocket(socketPath, 2*time.Second); err != nil {
+				log.Printf("panel %s socket not ready: %v", lbl, err)
+				panelReady.Done()
+			} else {
+				panelReady.Done()
+			}
+
 			defer wg.Done()
-			defer panelReady.Done() // Mark the panel as "ready" when initialization finishes
-			if err := p.Run(); err != nil {
+			if err := p.Wait(); err != nil {
 				log.Printf("panel %s exited with error: %v", lbl, err)
 			} else {
 				log.Printf("panel %s exited cleanly", lbl)
@@ -165,6 +179,8 @@ func main() {
 	}
 
 	panelReady.Wait()
+	time.Sleep(50 * time.Millisecond)
+	showPanels(panels)
 
 	// watcher: looks for /tmp/felog_clicked_<label> written by any TUI
 	go func() {
@@ -208,4 +224,62 @@ func main() {
 	}()
 
 	wg.Wait()
+}
+
+func panelSocket(p *katnip.Panel) string {
+	key := katnip.GetEnvKey("SOCKET") + "="
+	for _, env := range p.Cmd.Env {
+		if strings.HasPrefix(env, key) {
+			return strings.TrimPrefix(env, key)
+		}
+	}
+	return ""
+}
+
+func showPanels(panels []*katnip.Panel) {
+	var wg sync.WaitGroup
+	for _, p := range panels {
+		if p == nil {
+			continue
+		}
+		socketPath := panelSocket(p)
+		if socketPath == "" {
+			log.Printf("panel %s missing socket path", p.Cmd.Path)
+			continue
+		}
+
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			kitty := katnip.NewKitty(path)
+			var lastErr error
+			for attempt := 0; attempt < 5; attempt++ {
+				if err := kitty.Show(); err != nil {
+					lastErr = err
+					time.Sleep(50 * time.Millisecond)
+					continue
+				}
+				_ = kitty.Close()
+				return
+			}
+			log.Printf("failed to show panel via %s after retries: %v", path, lastErr)
+			_ = kitty.Close()
+		}(socketPath)
+	}
+	wg.Wait()
+}
+
+func waitForSocket(path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout waiting for socket %s", path)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
